@@ -1,0 +1,51 @@
+pipeline {
+    agent any
+
+    environment {
+        GOOGLE_CREDENTIALS = credentials('Jenkins-SA') // Use stored GCP credentials
+    }
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', changelog: false, credentialsId: 'github-sa', poll: false, url: 'https://github.com/fastest-man-alive/timeline.git'
+            }
+        }
+
+        stage('Setup Terraform') {
+            steps {
+                sh '''
+                cd gcp
+                terraform init
+                terraform validate
+                '''
+            }
+        }
+
+        stage('Plan Terraform') {
+            steps {
+                sh '''
+                terraform plan
+                '''
+            }
+        }
+
+        stage('Approval') {
+            steps {
+                timeout(activity: true, time: 10) {
+                    input message: 'Do you approve to continue?', parameters: [
+                        choice(name: 'Approval', choices: ['Yes', 'No'], description: 'Select Yes to continue, No to stop')
+                    ]
+                }
+            }
+        }
+
+        stage('Apply Terraform') {
+            steps {
+                sh '''
+                    terraform apply -auto-approve
+                '''
+            }
+        }
+    }
+}
